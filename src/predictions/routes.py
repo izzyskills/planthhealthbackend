@@ -25,14 +25,16 @@ prediction_router = APIRouter()
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Load the TensorFlow model using absolute path
-model_path = os.path.join(current_dir, "my_model.h5")
+model_path = os.path.join(current_dir, "my_model_quantized.tflite")
 try:
-    model = tf.keras.models.load_model(model_path)
+    interpreter = tf.lite.Interpreter(model_path=model_path)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
     print(f"Successfully loaded model from {model_path}")
 except Exception as e:
     print(f"Error loading model: {str(e)}")
-    # We'll raise an exception during the first API call if the model isn't loaded
-    model = None
+    interpreter = None
 
 # Define class names matching those used to seed the database
 class_names = [
@@ -106,7 +108,7 @@ async def predict_disease(
     """
     Predict plant disease based on uploaded image
     """
-    if model is None:
+    if interpreter is None:
         raise HTTPException(
             status_code=500, detail="Model not loaded. Check server logs."
         )
@@ -121,10 +123,14 @@ async def predict_disease(
         # Preprocess the image
         img, image_data = await preprocess_image(file)
 
-        # Make prediction (run in a thread pool to avoid blocking)
-        predictions = await asyncio.to_thread(model.predict, img)
-        predictions = predictions[0]
+        interpreter.set_tensor(input_details[0]["index"], img)
 
+        # Run inference (run in a thread pool to avoid blocking)
+        await asyncio.to_thread(interpreter.invoke)
+
+        # Get the output tensor
+        predictions = interpreter.get_tensor(output_details[0]["index"])
+        predictions = predictions[0]
         pred_class_idx = np.argmax(predictions)
         pred_class_name = class_names[pred_class_idx]
         confidence = float(predictions[pred_class_idx])
