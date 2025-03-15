@@ -4,9 +4,7 @@ from fastapi import APIRouter, Depends, status, BackgroundTasks, Response, Reque
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from src.celery_tasks import send_email
 from src.db.main import get_session
-from src.db.redis import add_jti_to_blocklist
 
 from .dependencies import AccessTokenBearer
 from .schemas import UserCreateModel, UserLoginModel, UserResponseModel
@@ -14,7 +12,6 @@ from .services import UserService
 from .utils import (
     create_access_token,
     decode_token,
-    send_verification_mail,
     verify_password,
 )
 
@@ -65,10 +62,6 @@ async def login_users(
 
     if user:
         password_valid = verify_password(password, user["password_hash"])
-
-        if password_valid and not user.get("is_verified", False):
-            send_verification_mail(email)
-            raise AccountNotVerified()
 
         if password_valid:
             user_id = str(user["_id"])
@@ -133,15 +126,15 @@ async def revoke_token(
     request: Request, token_details: dict = Depends(AccessTokenBearer())
 ):
     """Invalidate access and refresh tokens."""
-    jti = token_details["jti"]
-
-    await add_jti_to_blocklist(jti)
-
-    refresh_token = request.cookies.get("refresh_token")
-    if refresh_token:
-        token_details = decode_token(refresh_token)
-        jti = token_details["jti"]
-        await add_jti_to_blocklist(jti)
+    # jti = token_details["jti"]
+    #
+    # await add_jti_to_blocklist(jti)
+    #
+    # refresh_token = request.cookies.get("refresh_token")
+    # if refresh_token:
+    #     token_details = decode_token(refresh_token)
+    #     jti = token_details["jti"]
+    #     await add_jti_to_blocklist(jti)
 
     return JSONResponse(
         content={"message": "Logged Out Successfully"}, status_code=status.HTTP_200_OK

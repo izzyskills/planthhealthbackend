@@ -2,7 +2,6 @@ from fastapi import Depends, Request, status
 from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
 
-from src.db.redis import token_in_blocklist
 
 from .services import UserService
 from .utils import decode_token
@@ -29,9 +28,6 @@ class TokenBearer(HTTPBearer):
         token_data = decode_token(token)
 
         if not self.token_valid(token):
-            raise InvalidToken()
-
-        if await token_in_blocklist(token_data["jti"]):
             raise InvalidToken()
 
         self.verify_token_data(token_data)
