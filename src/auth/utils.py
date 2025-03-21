@@ -6,6 +6,7 @@ from itsdangerous import URLSafeTimedSerializer
 import jwt
 from passlib.context import CryptContext
 
+from src.celery_tasks import send_email
 from src.config import Config
 
 passwd_context = CryptContext(schemes=["bcrypt"])
@@ -74,6 +75,28 @@ def decode_url_safe_token(token: str):
         token_data = serializer.loads(token)
 
         return token_data
+
+    except Exception as e:
+        logging.error(str(e))
+
+
+def send_verification_mail(email: str):
+    try:
+
+        token = create_url_safe_token({"email": email})
+
+        link = f"http://{Config.DOMAIN}/api/v1/auth/verify/{token}"
+
+        html = f"""
+        <h1>Verify your Email</h1>
+        <p>Please click this <a href="{link}">link</a> to verify your email</p>
+        """
+
+        emails = [email]
+
+        subject = "Verify Your email"
+
+        send_email.delay(emails, subject, html)
 
     except Exception as e:
         logging.error(str(e))
